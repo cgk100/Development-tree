@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>力学发育树图 - 双层圆形布局</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        .node circle {
+            fill: #fff;
+            stroke: steelblue;
+            stroke-width: 1.5px;
+        }
+        
+        .node text {
+            font-family: "Microsoft YaHei", sans-serif;
+            font-size: 11px;
+        }
+        
+        .link {
+            fill: none;
+            stroke: #ccc;
+            stroke-width: 1px;
+        }
+
+        .category-arc {
+            opacity: 0.85;
+        }
+
+        .category-label {
+            font-family: "Microsoft YaHei", sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+            fill: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div id="tree"></div>
+    <script>
+        const width = 800;
+        const height = 800;
+        const radius = Math.min(width, height) / 2 - 100;
+        
+        const color = d3.scaleOrdinal()
+            .domain(["其他", "力学", "建筑"])
+            .range(["#E63946", "#1D3557", "#2A9D8F"]);
+
+        const svg = d3.select("#tree")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .append("g")
+            .attr("transform", `translate(${width/2},${height/2})`);
+
+        const tree = d3.cluster()
+            .size([360, radius - 60]);
+
+        // 从JSON文件加载数据
+        d3.json("data.json").then(function(data) {
+            const root = d3.hierarchy(data);
+            tree(root);
+
+            const categoryArc = d3.arc()
+                .innerRadius(radius - 10)
+                .outerRadius(radius + 30);
+
+            const categories = root.children.map(d => ({
+                name: d.data.name,
+                startAngle: (d.x - d.x / 2) * Math.PI / 180,
+                endAngle: (d.x + d.x / 2) * Math.PI / 180
+            }));
+
+            // 绘制外圈分类
+            svg.selectAll(".category-arc")
+                .data(categories)
+                .join("path")
+                .attr("class", "category-arc")
+                .attr("d", categoryArc)
+                .style("fill", d => color(d.name));
+
+            // 绘制分类标签
+            svg.selectAll(".category-label")
+                .data(categories)
+                .join("text")
+                .attr("class", "category-label")
+                .attr("transform", d => {
+                    const angle = ((d.startAngle + d.endAngle) / 2) * 180 / Math.PI - 90;
+                    const radius = height / 2 - 35;
+                    return `rotate(${angle}) translate(${radius},0) ${angle > 90 ? 'rotate(180)' : ''}`;
+                })
+                .attr("text-anchor", "middle")
+                .text(d => d.name);
+
+            // 绘制连接线
+            svg.selectAll(".link")
+                .data(root.links())
+                .join("path")
+                .attr("class", "link")
+                .attr("d", d3.linkRadial()
+                    .angle(d => d.x * Math.PI / 180)
+                    .radius(d => d.y));
+
+            // 绘制节点
+            const node = svg.selectAll(".node")
+                .data(root.descendants())
+                .join("g")
+                .attr("class", "node")
+                .attr("transform", d => `rotate(${d.x - 90}) translate(${d.y},0)`);
+
+            node.append("circle")
+                .attr("r", 3)
+                .style("fill", d => d.children ? "#fff" : color(d.parent.data.name));
+
+            node.append("text")
+                .attr("dy", ".31em")
+                .attr("x", d => d.x < 180 ? 8 : -8)
+                .attr("text-anchor", d => d.x < 180 ? "start" : "end")
+                .attr("transform", d => d.x < 180 ? null : "rotate(180)")
+                .text(d => d.data.name)
+                .style("fill", "#333")
+                .style("font-size", d => d.children ? "12px" : "10px");
+
+            // 添加交互效果
+            node.on("mouseover", function(event, d) {
+                d3.select(this).select("circle")
+                    .transition()
+                    .duration(200)
+                    .attr("r", 5)
+                    .style("fill", d => color(d.parent ? d.parent.data.name : d.data.name));
+                
+                d3.select(this).select("text")
+                    .transition()
+                    .duration(200)
+                    .style("font-size", "13px")
+                    .style("font-weight", "bold");
+            })
+            .on("mouseout", function(event, d) {
+                d3.select(this).select("circle")
+                    .transition()
+                    .duration(200)
+                    .attr("r", 3)
+                    .style("fill", d => d.children ? "#fff" : color(d.parent.data.name));
+                
+                d3.select(this).select("text")
+                    .transition()
+                    .duration(200)
+                    .style("font-size", d => d.children ? "12px" : "10px")
+                    .style("font-weight", "normal");
+            });
+        }).catch(function(error) {
+            console.error("Error loading the data:", error);
+        });
+    </script>
+</body>
+</html>
